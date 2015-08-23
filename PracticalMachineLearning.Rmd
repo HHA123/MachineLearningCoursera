@@ -1,0 +1,53 @@
+---
+title: "PracticalMachineLeraning"
+output: 
+  html_document: 
+    keep_md: yes
+---
+This is a project in the course practical machine learning, from John Hopkins coursera.org. The aim of this project is to predict the manner of which a group of participants performed different exercises (This is in the classe variable). This will be done with machine learning and the data supplied by <http://groupware.les.inf.puc-rio.br/har> and downloaded from
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>. The covariates used for prediction describe features such as position,acceleration and pitch of various body parts.
+
+First we start by loading and cleaning the data.
+```{r}
+library(caret)
+
+data <- read.csv("pml-training.csv")
+cleandata <- function(data){
+        
+        isBad <- sapply(1:dim(data)[2],function(x){sum(is.na(data)[,x])>10 || levels(data[,x])[1]==""})
+        isBad[is.na(isBad)]<- FALSE
+        data <- data[,!isBad]
+        data[,2] <- as.numeric(data[,2])
+        data <- data[,-c(1,3:6)]
+        return(data)
+}
+data <- cleandata(data)
+```
+This cleaning does remove a lot of data but as we will see later,that's OK. If one would want better accuracy for the final model it would probably pay to include more variables.
+
+To be able to estimate the out of sample error rate we create a training and test set
+```{r}
+#creating a test data set to use for out of sample error rate
+inTrain <- createDataPartition(data[,55],p=0.7,list=FALSE)
+training <- data[inTrain,]
+testing <- data[-inTrain,]
+```
+
+Now it's time to train our model. We will use generalized boosted regression models for this, with 5 fold cross validation repeated 3 times.
+```{r,cache=TRUE}
+#Here we tell the train function to use 5 fold crossvalidation, 3 times
+Control <- trainControl(method = "repeatedcv",number=5,repeats=3)
+modFit <- train(classe~.,method="gbm",data=training,trControl=Control,verbose=FALSE)
+```
+And the result of this can be viewed below
+```{r}
+#Getting the predicted values
+pred <- predict(modFit,testing[,-55])
+#printing the statistics of the prediction on the testing set (i.e out of sample error)
+confusionMatrix(pred,testing[,55])
+```
+
+Thus the out of sample error rate is
+```{r}
+cat(100*(1-sum(pred==testing[,55])/length(pred)), '%')
+```
